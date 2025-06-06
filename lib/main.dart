@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
-import 'tarea.dart'; // Importamos la clase Tarea
 
 void main() {
   runApp(const MyApp());
 }
 
-// Lista global de tareas
-List<Tarea> listaTareas = [];
+class Tarea {
+  final String titulo;
+  final String prioridad;
+  final double estimacion;
+  final DateTime fechaRegistro;
+
+  Tarea({
+    required this.titulo,
+    required this.prioridad,
+    required this.estimacion,
+    required this.fechaRegistro,
+  });
+}
+
+class ChatMessage {
+  final String texto;
+  final bool esUsuario;
+
+  ChatMessage({required this.texto, required this.esUsuario});
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -14,115 +31,207 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gestor de Tareas',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const TareaScreen(),
+      title: 'Gestión de Tareas',
+      home: const MainMenu(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class TareaScreen extends StatefulWidget {
-  const TareaScreen({super.key});
+class MainMenu extends StatelessWidget {
+  const MainMenu({super.key});
 
   @override
-  State<TareaScreen> createState() => _TareaScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Menú Principal'),
+        backgroundColor: Colors.indigo,
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ChatPage()),
+                );
+              },
+              child: const Text("Abrir Chat"),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ListaTareasPage()),
+                );
+              },
+              child: const Text("Abrir Lista de Tareas"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _TareaScreenState extends State<TareaScreen> {
-  final _tituloController = TextEditingController();
-  final _estimacionController = TextEditingController();
-  String _prioridad = 'Alta';
+class ChatPage extends StatefulWidget {
+  const ChatPage({super.key});
 
-  void _guardarTarea() {
-    final titulo = _tituloController.text;
-    final estimacion = int.tryParse(_estimacionController.text);
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
 
-    if (titulo.isEmpty || estimacion == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa todos los campos correctamente')),
-      );
-      return;
-    }
+class _ChatPageState extends State<ChatPage> {
+  final List<ChatMessage> mensajes = [];
+  final List<Tarea> listaTareas = [];
+  final TextEditingController controlador = TextEditingController();
 
-    final nuevaTarea = Tarea(
-      titulo: titulo,
-      prioridad: _prioridad,
-      estimacionHoras: estimacion,
-    );
+  // Estados del flujo
+  String? tituloTemporal;
+  String? prioridadTemporal;
+
+  void enviarMensaje() {
+    final texto = controlador.text.trim();
+    if (texto.isEmpty) return;
 
     setState(() {
-      listaTareas.add(nuevaTarea);
+      mensajes.add(ChatMessage(texto: texto, esUsuario: true));
     });
 
-    _tituloController.clear();
-    _estimacionController.clear();
+    procesarEntrada(texto);
+    controlador.clear();
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('✅ Tarea agregada: ${nuevaTarea.titulo}')),
-    );
+  void agregarMensaje(String texto, {bool esUsuario = false}) {
+    setState(() {
+      mensajes.add(ChatMessage(texto: texto, esUsuario: esUsuario));
+    });
+  }
+
+  void procesarEntrada(String entrada) {
+    if (tituloTemporal == null && entrada.toLowerCase().startsWith("agregar tarea:")) {
+      tituloTemporal = entrada.substring(14).trim();
+      agregarMensaje("¿Cuál es la prioridad de esta tarea? (Alta, Media, Baja)");
+    } else if (tituloTemporal != null && prioridadTemporal == null) {
+      final prioridad = entrada.toLowerCase();
+      if (["alta", "media", "baja"].contains(prioridad)) {
+        prioridadTemporal = prioridad[0].toUpperCase() + prioridad.substring(1); // Capitalizar
+        agregarMensaje("¿Cuántas horas estimas que tomará esta tarea?");
+      } else {
+        agregarMensaje("Por favor indica una prioridad válida: Alta, Media o Baja.");
+      }
+    } else if (tituloTemporal != null && prioridadTemporal != null) {
+      final horas = double.tryParse(entrada);
+      if (horas != null && horas > 0) {
+        final tarea = Tarea(
+          titulo: tituloTemporal!,
+          prioridad: prioridadTemporal!,
+          estimacion: horas,
+          fechaRegistro: DateTime.now(),
+        );
+
+        setState(() {
+          listaTareas.add(tarea);
+        });
+
+        agregarMensaje("✅ Tarea registrada: ${tarea.titulo}, prioridad ${tarea.prioridad}, ${tarea.estimacion} horas.");
+        // Reiniciar flujo
+        tituloTemporal = null;
+        prioridadTemporal = null;
+      } else {
+        agregarMensaje("Por favor ingresa una cantidad válida de horas.");
+      }
+    } else {
+      agregarMensaje("🤖 Comando no reconocido. Para agregar una tarea escribe:\n\nAgregar tarea: [nombre de la tarea]");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Agregar Tarea'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _tituloController,
-              decoration: const InputDecoration(labelText: 'Título de la tarea'),
-            ),
-            TextField(
-              controller: _estimacionController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Estimación (horas)'),
-            ),
-            DropdownButton<String>(
-              value: _prioridad,
-              onChanged: (String? nueva) {
-                if (nueva != null) {
-                  setState(() {
-                    _prioridad = nueva;
-                  });
-                }
-              },
-              items: <String>['Alta', 'Media', 'Baja']
-                  .map<DropdownMenuItem<String>>((String valor) {
-                return DropdownMenuItem<String>(
-                  value: valor,
-                  child: Text(valor),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: _guardarTarea,
-              child: const Text('Guardar Tarea'),
-            ),
-            const SizedBox(height: 20),
-            const Text('Tareas registradas:'),
-            Expanded(
-              child: ListView.builder(
-                itemCount: listaTareas.length,
-                itemBuilder: (context, index) {
-                  final tarea = listaTareas[index];
-                  return ListTile(
-                    title: Text(tarea.titulo),
-                    subtitle: Text(
-                      'Prioridad: ${tarea.prioridad}, Estimación: ${tarea.estimacionHoras}h',
-                    ),
-                  );
-                },
-              ),
-            )
-          ],
+        title: const Text('Chat'),
+        backgroundColor: Colors.indigo,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: mensajes.length,
+              itemBuilder: (context, index) {
+                final mensaje = mensajes[index];
+                return Container(
+                  alignment: mensaje.esUsuario ? Alignment.centerRight : Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: mensaje.esUsuario ? Colors.indigo[200] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(mensaje.texto),
+                  ),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controlador,
+                    onSubmitted: (_) => enviarMensaje(),
+                    decoration: const InputDecoration(
+                      hintText: 'Escribe un mensaje...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: enviarMensaje,
+                  child: const Text("Enviar"),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ListaTareasPage extends StatelessWidget {
+  const ListaTareasPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Lista de Tareas'),
+        backgroundColor: Colors.indigo,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+      ),
+      body: Center(
+        child: const Text("Aquí se mostrarán las tareas registradas"),
       ),
     );
   }
