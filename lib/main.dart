@@ -4,11 +4,24 @@ void main() {
   runApp(const MyApp());
 }
 
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Gestor de Tareas',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: PantallaPrincipal(),
+    );
+  }
+}
+
 class Tarea {
-  final String titulo;
-  final String prioridad;
-  final double estimacion;
-  final DateTime fechaRegistro;
+  String titulo;
+  String prioridad;
+  int estimacion;
+  DateTime fechaRegistro;
 
   Tarea({
     required this.titulo,
@@ -18,36 +31,15 @@ class Tarea {
   });
 }
 
-class ChatMessage {
-  final String texto;
-  final bool esUsuario;
+class PantallaPrincipal extends StatelessWidget {
+  PantallaPrincipal({super.key});
 
-  ChatMessage({required this.texto, required this.esUsuario});
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Gestión de Tareas',
-      home: const MainMenu(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
-
-class MainMenu extends StatelessWidget {
-  const MainMenu({super.key});
+  final List<Tarea> tareas = [];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Menú Principal'),
-        backgroundColor: Colors.indigo,
-      ),
+      appBar: AppBar(title: const Text('Menú principal')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -56,20 +48,23 @@ class MainMenu extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ChatPage()),
+                  MaterialPageRoute(
+                    builder: (context) => ChatPage(tareas: tareas),
+                  ),
                 );
               },
-              child: const Text("Abrir Chat"),
+              child: const Text('Abrir Chat'),
             ),
-            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ListaTareasPage()),
+                  MaterialPageRoute(
+                    builder: (context) => ListaTareasPage(tareas: tareas),
+                  ),
                 );
               },
-              child: const Text("Abrir Lista de Tareas"),
+              child: const Text('Abrir lista de tareas'),
             ),
           ],
         ),
@@ -79,75 +74,55 @@ class MainMenu extends StatelessWidget {
 }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  final List<Tarea> tareas;
+  const ChatPage({super.key, required this.tareas});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> {
-  final List<ChatMessage> mensajes = [];
-  final List<Tarea> listaTareas = [];
-  final TextEditingController controlador = TextEditingController();
+  final TextEditingController controladorTexto = TextEditingController();
+  String tituloTarea = '';
+  String? prioridadSeleccionada;
+  final List<String> mensajes = [];
 
-  // Estados del flujo
-  String? tituloTemporal;
-  String? prioridadTemporal;
-
-  void enviarMensaje() {
-    final texto = controlador.text.trim();
-    if (texto.isEmpty) return;
-
+  void enviarMensaje(String texto) {
     setState(() {
-      mensajes.add(ChatMessage(texto: texto, esUsuario: true));
+      mensajes.add("Tú: $texto");
     });
 
-    procesarEntrada(texto);
-    controlador.clear();
-  }
+    if (texto.toLowerCase().startsWith("agregar tarea:")) {
+      tituloTarea = texto.substring("agregar tarea:".length).trim();
+      setState(() {
+        mensajes.add("Bot: ¿Cuál es la prioridad de esta tarea (Alta, Media, Baja)?");
+      });
+    } else if (['alta', 'media', 'baja'].contains(texto.toLowerCase())) {
+      prioridadSeleccionada = texto[0].toUpperCase() + texto.substring(1).toLowerCase();
+      setState(() {
+        mensajes.add("Bot: ¿Cuántas horas estimas que tomará esta tarea?");
+      });
+    } else if (int.tryParse(texto) != null && prioridadSeleccionada != null && tituloTarea.isNotEmpty) {
+      final nuevaTarea = Tarea(
+        titulo: tituloTarea,
+        prioridad: prioridadSeleccionada!,
+        estimacion: int.parse(texto),
+        fechaRegistro: DateTime.now(),
+      );
+      widget.tareas.add(nuevaTarea);
 
-  void agregarMensaje(String texto, {bool esUsuario = false}) {
-    setState(() {
-      mensajes.add(ChatMessage(texto: texto, esUsuario: esUsuario));
-    });
-  }
-
-  void procesarEntrada(String entrada) {
-    if (tituloTemporal == null && entrada.toLowerCase().startsWith("agregar tarea:")) {
-      tituloTemporal = entrada.substring(14).trim();
-      agregarMensaje("¿Cuál es la prioridad de esta tarea? (Alta, Media, Baja)");
-    } else if (tituloTemporal != null && prioridadTemporal == null) {
-      final prioridad = entrada.toLowerCase();
-      if (["alta", "media", "baja"].contains(prioridad)) {
-        prioridadTemporal = prioridad[0].toUpperCase() + prioridad.substring(1); // Capitalizar
-        agregarMensaje("¿Cuántas horas estimas que tomará esta tarea?");
-      } else {
-        agregarMensaje("Por favor indica una prioridad válida: Alta, Media o Baja.");
-      }
-    } else if (tituloTemporal != null && prioridadTemporal != null) {
-      final horas = double.tryParse(entrada);
-      if (horas != null && horas > 0) {
-        final tarea = Tarea(
-          titulo: tituloTemporal!,
-          prioridad: prioridadTemporal!,
-          estimacion: horas,
-          fechaRegistro: DateTime.now(),
-        );
-
-        setState(() {
-          listaTareas.add(tarea);
-        });
-
-        agregarMensaje("✅ Tarea registrada: ${tarea.titulo}, prioridad ${tarea.prioridad}, ${tarea.estimacion} horas.");
-        // Reiniciar flujo
-        tituloTemporal = null;
-        prioridadTemporal = null;
-      } else {
-        agregarMensaje("Por favor ingresa una cantidad válida de horas.");
-      }
+      setState(() {
+        mensajes.add("Bot: Tarea registrada: $tituloTarea, prioridad $prioridadSeleccionada, $texto horas.");
+        tituloTarea = '';
+        prioridadSeleccionada = null;
+      });
     } else {
-      agregarMensaje("🤖 Comando no reconocido. Para agregar una tarea escribe:\n\nAgregar tarea: [nombre de la tarea]");
+      setState(() {
+        mensajes.add("Bot: No entendí eso. Si deseas registrar una tarea, escribe 'Agregar tarea: ...'");
+      });
     }
+
+    controladorTexto.clear();
   }
 
   @override
@@ -155,12 +130,9 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat'),
-        backgroundColor: Colors.indigo,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Column(
@@ -168,46 +140,33 @@ class _ChatPageState extends State<ChatPage> {
           Expanded(
             child: ListView.builder(
               itemCount: mensajes.length,
-              itemBuilder: (context, index) {
-                final mensaje = mensajes[index];
-                return Container(
-                  alignment: mensaje.esUsuario ? Alignment.centerRight : Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: mensaje.esUsuario ? Colors.indigo[200] : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(mensaje.texto),
-                  ),
-                );
-              },
+              itemBuilder: (context, index) => ListTile(
+                title: Text(mensajes[index]),
+              ),
             ),
           ),
-          const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: controlador,
-                    onSubmitted: (_) => enviarMensaje(),
+                    controller: controladorTexto,
+                    onSubmitted: enviarMensaje,
                     decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje...',
+                      labelText: 'Escribe tu mensaje...',
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: enviarMensaje,
-                  child: const Text("Enviar"),
+                  onPressed: () => enviarMensaje(controladorTexto.text),
+                  child: const Text('Enviar'),
                 ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );
@@ -215,24 +174,34 @@ class _ChatPageState extends State<ChatPage> {
 }
 
 class ListaTareasPage extends StatelessWidget {
-  const ListaTareasPage({super.key});
+  final List<Tarea> tareas;
+  const ListaTareasPage({super.key, required this.tareas});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lista de Tareas'),
-        backgroundColor: Colors.indigo,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Center(
-        child: const Text("Aquí se mostrarán las tareas registradas"),
-      ),
+      body: tareas.isEmpty
+          ? const Center(child: Text('No hay tareas registradas.'))
+          : ListView.builder(
+              itemCount: tareas.length,
+              itemBuilder: (context, index) {
+                final tarea = tareas[index];
+                return ListTile(
+                  title: Text(tarea.titulo),
+                  subtitle: Text('Prioridad: ${tarea.prioridad}, Estimación: ${tarea.estimacion}h'),
+                  trailing: Text(
+                    '${tarea.fechaRegistro.day}/${tarea.fechaRegistro.month}/${tarea.fechaRegistro.year}',
+                  ),
+                );
+              },
+            ),
     );
   }
 }
