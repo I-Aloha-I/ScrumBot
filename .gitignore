@@ -47,3 +47,4 @@ app.*.map.json
 # Archivos adicionales de Flutter que no se deben subir
 .metadata
 analysis_options.yaml
+lib/config.dart
