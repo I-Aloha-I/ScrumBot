@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart'; // 1. Importamos el paquete
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'gemma_api_service.dart';
+import 'tarea.dart'; // Necesitamos acceso a la clase Tarea y la lista de tareas
+
+// Enum para controlar el modo de la conversación (preguntando o creando tarea)
+enum ConversationMode {
+  preguntando,
+  creandoTarea_PidiendoPrioridad,
+  creandoTarea_PidiendoEstimacion
+}
 
 class ChatMessage {
   final String texto;
@@ -19,22 +27,110 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
   final TextEditingController _controlador = TextEditingController();
   bool _estaCargando = false;
 
+  // --- NUEVOS ESTADOS PARA CONTROLAR LA CREACIÓN DE TAREAS ---
+  ConversationMode _modo = ConversationMode.preguntando;
+  String? _tituloTemp;
+  String? _prioridadTemp;
+  // --- FIN DE NUEVOS ESTADOS ---
+
   @override
   void initState() {
     super.initState();
     _mensajes.add(ChatMessage(
         texto:
-            '¡Hola! Soy ScrumBot. ¿En qué puedo ayudarte hoy sobre la metodología Scrum?',
+            '¡Hola! Soy ScrumBot. Pregúntame sobre Scrum o añade una tarea escribiendo "agregar tarea: [tu tarea]".',
         esUsuario: false));
   }
 
+  // --- LÓGICA PRINCIPAL MODIFICADA ---
   void _enviarMensaje() async {
     final texto = _controlador.text.trim();
     if (texto.isEmpty) return;
 
-    _controlador.clear();
+    final textoEnMinusculas = texto.toLowerCase();
+
+    // Añadimos el mensaje del usuario a la lista
     setState(() {
       _mensajes.add(ChatMessage(texto: texto, esUsuario: true));
+    });
+    _controlador.clear();
+
+    // --- DECIDIMOS QUÉ HACER CON EL MENSAJE ---
+
+    // 1. Si estamos en medio de la creación de una tarea, continuamos ese flujo.
+    if (_modo != ConversationMode.preguntando) {
+      _continuarCreacionTarea(textoEnMinusculas);
+    }
+    // 2. Si el usuario quiere agregar una nueva tarea.
+    else if (textoEnMinusculas.startsWith('agregar tarea:')) {
+      _iniciarCreacionTarea(texto);
+    }
+    // 3. Si es cualquier otro mensaje, lo tratamos como una pregunta para la IA.
+    else {
+      _hacerPreguntaScrum(texto);
+    }
+  }
+
+  void _iniciarCreacionTarea(String texto) {
+    setState(() {
+      _tituloTemp = texto.substring(15).trim();
+      _modo = ConversationMode.creandoTarea_PidiendoPrioridad;
+      _mensajes.add(ChatMessage(
+          texto: 'Entendido. ¿Cuál es la prioridad de la tarea? (Alta, Media, Baja)',
+          esUsuario: false));
+    });
+  }
+
+  void _continuarCreacionTarea(String texto) {
+    if (_modo == ConversationMode.creandoTarea_PidiendoPrioridad) {
+      if (['alta', 'media', 'baja'].contains(texto)) {
+        setState(() {
+          _prioridadTemp = texto;
+          _modo = ConversationMode.creandoTarea_PidiendoEstimacion;
+          _mensajes.add(ChatMessage(
+              texto: 'Perfecto. ¿Cuántas horas estimas para esta tarea?',
+              esUsuario: false));
+        });
+      } else {
+        setState(() {
+          _mensajes.add(ChatMessage(
+              texto: 'Prioridad no válida. Por favor, responde Alta, Media o Baja.',
+              esUsuario: false));
+        });
+      }
+    } else if (_modo == ConversationMode.creandoTarea_PidiendoEstimacion) {
+      int? horas = int.tryParse(texto);
+      if (horas != null) {
+        final nuevaTarea = Tarea(
+          titulo: _tituloTemp!,
+          prioridad: _prioridadTemp!,
+          estimacion: horas,
+          fechaRegistro: DateTime.now(),
+        );
+        tareas.add(nuevaTarea); // Añadimos la tarea a la lista global
+
+        setState(() {
+          _mensajes.add(ChatMessage(
+              texto:
+                  '¡Tarea registrada con éxito!\nTítulo: ${_tituloTemp!}\nPrioridad: ${_prioridadTemp!}\nEstimación: $horas horas.',
+              esUsuario: false));
+          // Reseteamos el modo para la siguiente conversación
+          _modo = ConversationMode.preguntando;
+          _tituloTemp = null;
+          _prioridadTemp = null;
+        });
+      } else {
+        setState(() {
+          _mensajes.add(ChatMessage(
+              texto: 'Por favor, introduce un número válido para las horas.',
+              esUsuario: false));
+        });
+      }
+    }
+  }
+
+  void _hacerPreguntaScrum(String texto) async {
+    setState(() {
       _estaCargando = true;
     });
 
@@ -44,6 +140,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       _estaCargando = false;
     });
   }
+  // --- FIN DE LA LÓGICA PRINCIPAL MODIFICADA ---
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +182,6 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     );
   }
 
-  // 2. ESTA ES LA FUNCIÓN QUE HEMOS MODIFICADO
   Widget _buildMessageBubble(ChatMessage msg) {
     return Align(
       alignment: msg.esUsuario ? Alignment.centerRight : Alignment.centerLeft,
@@ -96,14 +192,11 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
           color: msg.esUsuario ? Colors.blue[100] : Colors.grey[300],
           borderRadius: BorderRadius.circular(15.0),
         ),
-        // Aquí está la lógica principal del cambio:
         child: msg.esUsuario
-            // Si el mensaje es del usuario, usamos el widget Text normal.
             ? Text(msg.texto)
-            // Si el mensaje es del bot, usamos MarkdownBody para renderizar el formato.
             : MarkdownBody(
                 data: msg.texto,
-                selectable: true, // Permite seleccionar y copiar el texto
+                selectable: true,
               ),
       ),
     );
@@ -118,7 +211,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
             child: TextField(
               controller: _controlador,
               decoration: InputDecoration(
-                hintText: 'Pregunta algo sobre Scrum...',
+                hintText: 'Pregunta o agrega una tarea...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20.0),
                 ),

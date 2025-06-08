@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'chat_page.dart';
 import 'lista_tareas_page.dart';
-import 'scrum_bot_page.dart'; // Importa la nueva pantalla
+import 'scrum_bot_page.dart';
 
 class PantallaInicial extends StatelessWidget {
   @override
@@ -12,37 +11,30 @@ class PantallaInicial extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton(
-              child: Text('Abrir Chat de Tareas'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ChatPage()),
-                );
-              },
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              child: Text('Abrir lista de tareas'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ListaTareasPage()),
-                );
-              },
-            ),
-            SizedBox(height: 16), // Espacio adicional
-            // Botón para el nuevo ScrumBot
+            // El botón para el ScrumBot ahora es el principal para interacciones
             ElevatedButton(
               child: Text('Consultar a ScrumBot'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green, // Un color diferente para destacarlo
+                backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                textStyle: TextStyle(fontSize: 16)
               ),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ScrumBotPage()),
+                );
+              },
+            ),
+            SizedBox(height: 16),
+            // El botón para ver la lista de tareas sigue siendo útil
+            ElevatedButton(
+              child: Text('Ver lista de tareas'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ListaTareasPage()),
                 );
               },
             ),
