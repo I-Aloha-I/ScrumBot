@@ -2,117 +2,149 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'editar_historia_page.dart';
 
-class VerHistoriasPage extends StatelessWidget {
+class VerHistoriasPage extends StatefulWidget {
+  @override
+  _VerHistoriasPageState createState() => _VerHistoriasPageState();
+}
+
+class _VerHistoriasPageState extends State<VerHistoriasPage> {
+  String _ordenSeleccionado = 'prioridad_asc';
+  List<DocumentSnapshot> _historias = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarHistorias();
+  }
+
+  Future<void> _cargarHistorias() async {
+    final snapshot = await FirebaseFirestore.instance.collection('historias').get();
+    setState(() {
+      _historias = snapshot.docs;
+      _ordenarHistorias();
+    });
+  }
+
+  void _ordenarHistorias() {
+    _historias.sort((a, b) {
+      final dataA = a.data() as Map<String, dynamic>;
+      final dataB = b.data() as Map<String, dynamic>;
+
+      switch (_ordenSeleccionado) {
+        case 'prioridad_asc':
+          return _valorPrioridad(dataA['prioridad']).compareTo(_valorPrioridad(dataB['prioridad']));
+        case 'prioridad_desc':
+          return _valorPrioridad(dataB['prioridad']).compareTo(_valorPrioridad(dataA['prioridad']));
+        case 'estimacion_asc':
+          return (int.tryParse('${dataA['estimacion']}') ?? 0).compareTo(int.tryParse('${dataB['estimacion']}') ?? 0);
+        case 'estimacion_desc':
+          return (int.tryParse('${dataB['estimacion']}') ?? 0).compareTo(int.tryParse('${dataA['estimacion']}') ?? 0);
+        case 'titulo':
+          return (dataA['titulo'] ?? '').toLowerCase().compareTo((dataB['titulo'] ?? '').toLowerCase());
+        default:
+          return 0;
+      }
+    });
+  }
+
+  int _valorPrioridad(String? prioridad) {
+    switch (prioridad) {
+      case 'Alta':
+        return 1;
+      case 'Media':
+        return 2;
+      case 'Baja':
+        return 3;
+      default:
+        return 4;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Historias Guardadas')),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('historias')
-            .orderBy('fecha_creacion', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: DropdownButton<String>(
+              value: _ordenSeleccionado,
+              onChanged: (value) {
+                setState(() {
+                  _ordenSeleccionado = value!;
+                  _ordenarHistorias();
+                });
+              },
+              items: [
+                DropdownMenuItem(value: 'prioridad_asc', child: Text('Prioridad (Ascendente)')),
+                DropdownMenuItem(value: 'prioridad_desc', child: Text('Prioridad (Descendente)')),
+                DropdownMenuItem(value: 'estimacion_asc', child: Text('Estimación (Ascendente)')),
+                DropdownMenuItem(value: 'estimacion_desc', child: Text('Estimación (Descendente)')),
+                DropdownMenuItem(value: 'titulo', child: Text('Título (A-Z)')),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _historias.isEmpty
+                ? Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: _historias.length,
+                    itemBuilder: (context, index) {
+                      final doc = _historias[index];
+                      final historia = doc.data() as Map<String, dynamic>;
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(child: Text('No hay historias guardadas.'));
-          }
-
-          final historias = snapshot.data!.docs;
-
-          return ListView.builder(
-            itemCount: historias.length,
-            itemBuilder: (context, index) {
-              final historia = historias[index].data() as Map<String, dynamic>;
-
-              return Card(
-                margin: EdgeInsets.all(10),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        historia['titulo'] ?? 'Sin título',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 6),
-                      Text('Descripción: ${historia['descripcion'] ?? ''}'),
-                      Text('Criterios: ${historia['criterios'] ?? ''}'),
-                      Text('Estimación: ${historia['estimacion'] ?? ''}'),
-                      Text('Prioridad: ${historia['prioridad'] ?? ''}'),
-                      SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => EditarHistoriaPage(
-                                    id: historias[index].id,
-                                    data: historia,
+                      return Card(
+                        margin: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: ListTile(
+                          title: Text(historia['titulo'] ?? 'Sin título'),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(height: 4),
+                              Text('Descripción: ${historia['descripcion'] ?? ''}'),
+                              Text('Criterios: ${historia['criterios'] ?? ''}'),
+                              Text('Estimación: ${historia['estimacion']} h'),
+                              Text('Prioridad: ${historia['prioridad'] ?? ''}'),
+                              SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  TextButton(
+                                    child: Text('Editar'),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => EditarHistoriaPage(
+                                            id: doc.id,
+                                            data: historia,
+                                          ),
+                                        ),
+                                      ).then((_) => _cargarHistorias());
+                                    },
                                   ),
-                                ),
-                              );
-                            },
-                            icon: Icon(Icons.edit),
-                            label: Text('Editar'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                          ),
-                          SizedBox(width: 10),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: Text('Confirmar eliminación'),
-                                  content: Text('¿Estás seguro de que deseas eliminar esta historia?'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, false),
-                                      child: Text('Cancelar'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context, true),
-                                      child: Text('Eliminar'),
-                                    ),
-                                  ],
-                                ),
-                              );
-
-                              if (confirm == true) {
-                                await FirebaseFirestore.instance
-                                    .collection('historias')
-                                    .doc(historias[index].id)
-                                    .delete();
-
-                                // Mostrar SnackBar
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Historia eliminada con éxito'),
-                                    duration: Duration(seconds: 2),
+                                  SizedBox(width: 8),
+                                  TextButton(
+                                    child: Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                    onPressed: () async {
+                                      await FirebaseFirestore.instance.collection('historias').doc(doc.id).delete();
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                        content: Text('Historia eliminada.'),
+                                      ));
+                                      _cargarHistorias();
+                                    },
                                   ),
-                                );
-                              }
-                            },
-                            icon: Icon(Icons.delete),
-                            label: Text('Eliminar'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      );
+                    },
                   ),
-                ),
-              );
-            },
-          );
-        },
+          ),
+        ],
       ),
     );
   }
