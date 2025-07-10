@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'editar_historia_page.dart';
 
 class VerHistoriasPage extends StatelessWidget {
   @override
@@ -36,6 +37,24 @@ class VerHistoriasPage extends StatelessWidget {
                       Text('Criterios: ${historia['criterios'] ?? ''}'),
                       Text('Estimación: ${historia['estimacion'] ?? ''}'),
                       Text('Prioridad: ${historia['prioridad'] ?? ''}'),
+                      SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EditarHistoriaPage(
+                                  id: historias[index].id,
+                                  data: historia,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Text('Editar'),
+                        ),
+                      )
                     ],
                   ),
                 ),

@@ -53,8 +53,6 @@ class PantallaInicial extends StatelessWidget {
                 );
               },
             ),
-
-
           ],
         ),
       ),
