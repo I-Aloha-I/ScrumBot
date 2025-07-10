@@ -128,11 +128,31 @@ class _VerHistoriasPageState extends State<VerHistoriasPage> {
                                   TextButton(
                                     child: Text('Eliminar', style: TextStyle(color: Colors.red)),
                                     onPressed: () async {
-                                      await FirebaseFirestore.instance.collection('historias').doc(doc.id).delete();
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                        content: Text('Historia eliminada.'),
-                                      ));
-                                      _cargarHistorias();
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: Text('Confirmar eliminación'),
+                                          content: Text('¿Estás seguro de que deseas eliminar esta historia?'),
+                                          actions: [
+                                            TextButton(
+                                              child: Text('Cancelar'),
+                                              onPressed: () => Navigator.of(context).pop(false),
+                                            ),
+                                            TextButton(
+                                              child: Text('Eliminar'),
+                                              onPressed: () => Navigator.of(context).pop(true),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (confirm == true) {
+                                        await FirebaseFirestore.instance.collection('historias').doc(doc.id).delete();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Historia eliminada.')),
+                                        );
+                                        _cargarHistorias();
+                                      }
                                     },
                                   ),
                                 ],
