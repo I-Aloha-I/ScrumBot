@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
 
 class CrearHistoriaPage extends StatefulWidget {
   @override
@@ -11,35 +13,43 @@ class _CrearHistoriaPageState extends State<CrearHistoriaPage> {
   final _descripcionController = TextEditingController();
   final _criteriosController = TextEditingController();
   final _estimacionController = TextEditingController();
-
   String? _prioridadSeleccionada;
 
-  void _guardarHistoria() {
+  void _guardarHistoria() async {
     if (_formKey.currentState!.validate()) {
-      final titulo = _tituloController.text.trim();
-      final descripcion = _descripcionController.text.trim();
-      final criterios = _criteriosController.text.trim();
-      final estimacion = _estimacionController.text.trim();
-      final prioridad = _prioridadSeleccionada ?? 'No asignada';
+      final id = Uuid().v4();
 
-      print('Historia registrada:');
-      print('Título: $titulo');
-      print('Descripción: $descripcion');
-      print('Criterios: $criterios');
-      print('Estimación: $estimacion horas');
-      print('Prioridad: $prioridad');
+      final historia = {
+        'id': id,
+        'titulo': _tituloController.text.trim(),
+        'descripcion': _descripcionController.text.trim(),
+        'criterios': _criteriosController.text.trim(),
+        'estimacion': double.parse(_estimacionController.text.trim()),
+        'prioridad': _prioridadSeleccionada ?? 'No asignada',
+        'fecha_creacion': DateTime.now().toIso8601String(),
+      };
 
-      // Aquí podrías guardar en Firebase, por ahora solo mostramos un mensaje:
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Historia registrada correctamente')),
-      );
+      try {
+        await FirebaseFirestore.instance
+            .collection('historias')
+            .doc(id) // ✅ se asegura que sea tipo String
+            .set(historia);
 
-      _formKey.currentState!.reset();
-      _tituloController.clear();
-      _descripcionController.clear();
-      _criteriosController.clear();
-      _estimacionController.clear();
-      setState(() => _prioridadSeleccionada = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Historia guardada correctamente')),
+        );
+
+        _formKey.currentState!.reset();
+        _tituloController.clear();
+        _descripcionController.clear();
+        _criteriosController.clear();
+        _estimacionController.clear();
+        setState(() => _prioridadSeleccionada = null);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar historia: $e')),
+        );
+      }
     }
   }
 
@@ -92,7 +102,6 @@ class _CrearHistoriaPageState extends State<CrearHistoriaPage> {
                   return null;
                 },
               ),
-              SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _prioridadSeleccionada,
                 decoration: InputDecoration(labelText: 'Prioridad'),

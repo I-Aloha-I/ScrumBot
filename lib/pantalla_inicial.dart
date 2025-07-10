@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'lista_tareas_page.dart';
 import 'scrum_bot_page.dart';
-import 'crear_historia_page.dart'; // Asegúrate de tener este archivo
+import 'crear_historia_page.dart';
+import 'ver_historias_page.dart';
+
 
 class PantallaInicial extends StatelessWidget {
   @override
@@ -12,15 +14,8 @@ class PantallaInicial extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Botón para consultar al ScrumBot
             ElevatedButton(
               child: Text('Consultar a ScrumBot'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                textStyle: TextStyle(fontSize: 16),
-              ),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -29,8 +24,6 @@ class PantallaInicial extends StatelessWidget {
               },
             ),
             SizedBox(height: 16),
-
-            // Botón para ver la lista de tareas
             ElevatedButton(
               child: Text('Ver lista de tareas'),
               onPressed: () {
@@ -41,8 +34,6 @@ class PantallaInicial extends StatelessWidget {
               },
             ),
             SizedBox(height: 16),
-
-            // 🔥 Nuevo botón para crear historias de usuario
             ElevatedButton(
               child: Text('Crear historia de usuario'),
               onPressed: () {
@@ -52,6 +43,18 @@ class PantallaInicial extends StatelessWidget {
                 );
               },
             ),
+            SizedBox(height: 16),
+            ElevatedButton(
+              child: Text('Ver historias guardadas'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => VerHistoriasPage()),
+                );
+              },
+            ),
+
+
           ],
         ),
       ),

@@ -1,30 +1,27 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:proyecto1/main.dart';
+import 'package:proyecto1/crear_historia_page.dart'; // asegúrate de que el nombre del paquete sea correcto
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Mostrar y validar formulario de historia', (WidgetTester tester) async {
+    // Montamos CrearHistoriaPage dentro de un MaterialApp
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CrearHistoriaPage(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Esperamos a que se construya
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Verificamos que el campo Título esté presente
+    expect(find.widgetWithText(TextFormField, 'Título'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Tocamos el botón Guardar sin llenar el formulario
+    await tester.tap(find.text('Guardar Historia'));
+    await tester.pump(); // Dispara la validación
+
+    // Verificamos que aparezcan mensajes de error por campos vacíos
+    expect(find.text('Este campo es obligatorio'), findsWidgets);
   });
 }
