@@ -90,6 +90,14 @@ class VerHistoriasPage extends StatelessWidget {
                                     .collection('historias')
                                     .doc(historias[index].id)
                                     .delete();
+
+                                // Mostrar SnackBar
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Historia eliminada con éxito'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
                               }
                             },
                             icon: Icon(Icons.delete),
