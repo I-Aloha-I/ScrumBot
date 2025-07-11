@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'gemma_api_service.dart';
 import 'tarea.dart'; // Necesitamos acceso a la clase Tarea y la lista de tareas
 
@@ -57,6 +58,9 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
 
     // --- DECIDIMOS QUÉ HACER CON EL MENSAJE ---
 
+    // Expresión regular para detectar preguntas sobre priorización
+    final esPreguntaPriorizacion = RegExp(r'priorizar|dividir|ordenar|qué historias hacer primero|historias muy grandes').hasMatch(textoEnMinusculas);
+
     // 1. Si estamos en medio de la creación de una tarea, continuamos ese flujo.
     if (_modo != ConversationMode.preguntando) {
       _continuarCreacionTarea(textoEnMinusculas);
@@ -65,7 +69,11 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     else if (textoEnMinusculas.startsWith('agregar tarea:')) {
       _iniciarCreacionTarea(texto);
     }
-    // 3. Si es cualquier otro mensaje, lo tratamos como una pregunta para la IA.
+    // NUEVO: 3. Si es una pregunta sobre priorización de historias.
+    else if (esPreguntaPriorizacion) {
+      _obtenerSugerenciasDeHistorias(texto);
+    }
+    // 4. Si es cualquier otro mensaje, lo tratamos como una pregunta para la IA.
     else {
       _hacerPreguntaScrum(texto);
     }
@@ -140,7 +148,47 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       _estaCargando = false;
     });
   }
-  // --- FIN DE LA LÓGICA PRINCIPAL MODIFICADA ---
+
+  // --- NUEVA FUNCIÓN PARA OBTENER SUGERENCIAS ---
+  Future<void> _obtenerSugerenciasDeHistorias(String pregunta) async {
+    setState(() {
+      _estaCargando = true;
+    });
+
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('historias').get();
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _mensajes.add(ChatMessage(texto: 'No hay historias en el Product Backlog para analizar.', esUsuario: false));
+          _estaCargando = false;
+        });
+        return;
+      }
+
+      String contextoHistorias = "Aquí tienes una lista de historias de usuario del Product Backlog:\n";
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        contextoHistorias += "- Título: ${data['titulo']}, Descripción: ${data['descripcion']}, Prioridad: ${data['prioridad']}, Estimación: ${data['estimacion']} horas\n";
+      }
+
+      final promptCompleto = "$contextoHistorias\n\nBasado en estas historias, responde a la siguiente pregunta del usuario: \"$pregunta\"";
+
+      final respuesta = await ApiService.getScrumBotResponse(promptCompleto);
+      setState(() {
+        _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
+      });
+
+    } catch (e) {
+      setState(() {
+        _mensajes.add(ChatMessage(texto: 'Ocurrió un error al obtener las historias. Inténtalo de nuevo.', esUsuario: false));
+      });
+    } finally {
+      setState(() {
+        _estaCargando = false;
+      });
+    }
+  }
+  // --- FIN DE LA NUEVA FUNCIÓN ---
 
   @override
   Widget build(BuildContext context) {
