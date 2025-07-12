@@ -39,7 +39,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     super.initState();
     _mensajes.add(ChatMessage(
         texto:
-            '¡Hola! Soy ScrumBot. Pregúntame sobre Scrum o añade una tarea escribiendo "agregar tarea: [tu tarea]".',
+            '¡Hola! Soy ScrumBot. Pregúntame sobre Scrum, puedo añadir una tarea por ti si escribes "agregar tarea: [tu tarea]" o dime si deseas alguna recomendación para priorizar tus historias de usuario.',
         esUsuario: false));
   }
 
