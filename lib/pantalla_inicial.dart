@@ -1,61 +1,81 @@
 import 'package:flutter/material.dart';
+import 'ver_historias_page.dart';
+import 'crear_historia_page.dart';
 import 'lista_tareas_page.dart';
 import 'scrum_bot_page.dart';
-import 'crear_historia_page.dart';
-import 'ver_historias_page.dart';
-
 
 class PantallaInicial extends StatelessWidget {
+  const PantallaInicial({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Menú Principal')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text(
+          'ScrumBot',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        leading: const Icon(Icons.menu),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: ListView(
           children: [
-            ElevatedButton(
-              child: Text('Consultar a ScrumBot'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ScrumBotPage()),
-                );
-              },
+            const SizedBox(height: 20),
+            _buildCard(
+              context,
+              icon: Icons.library_books,
+              title: 'Ver Historias',
+              subtitle: 'Revisa las historias creadas',
+              page: VerHistoriasPage(),
             ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              child: Text('Ver lista de tareas'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ListaTareasPage()),
-                );
-              },
+            _buildCard(
+              context,
+              icon: Icons.add_circle_outline,
+              title: 'Crear Historia',
+              subtitle: 'Agrega una nueva historia de usuario',
+              page: CrearHistoriaPage(),
             ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              child: Text('Crear historia de usuario'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CrearHistoriaPage()),
-                );
-              },
+            _buildCard(
+              context,
+              icon: Icons.task_alt,
+              title: 'Lista de Tareas',
+              subtitle: 'Tareas del Sprint',
+              page: ListaTareasPage(),
             ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              child: Text('Ver historias guardadas'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => VerHistoriasPage()),
-                );
-              },
+            _buildCard(
+              context,
+              icon: Icons.smart_toy,
+              title: 'Scrum Bot',
+              subtitle: 'Habla con el asistente',
+              page: ScrumBotPage(),
             ),
-
-
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context,
+      {required IconData icon, required String title, required String subtitle, required Widget page}) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: Icon(icon, size: 40, color: Colors.indigo),
+        title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => page),
         ),
       ),
     );
