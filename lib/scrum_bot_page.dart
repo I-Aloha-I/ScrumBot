@@ -178,7 +178,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(14),
-        constraints: BoxConstraints(maxWidth: 300),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
           color: msg.esUsuario ? Colors.deepPurple[200] : Colors.white,
           borderRadius: BorderRadius.only(
