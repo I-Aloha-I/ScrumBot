@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'gemma_api_service.dart';
 import 'tarea.dart';
 
@@ -35,7 +36,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     super.initState();
     _mensajes.add(ChatMessage(
       texto:
-          '¡Hola! Soy ScrumBot 🤖. Pregúntame sobre Scrum o escribe "agregar tarea: [tu tarea]".',
+          '¡Hola! Soy ScrumBot 🤖. Pregúntame sobre Scrum o escribe "agregar tarea: [tu tarea]". También puedo ayudarte con la priorización de tus historias escribiendo "sugerencia historias: [tu pregunta]".',
       esUsuario: false,
     ));
   }
@@ -51,11 +52,35 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     });
     _controlador.clear();
 
+    final esPreguntaPriorizacion = RegExp(
+      r'priorizar|ordenar|hacer primero|importante|backlog|dividir tareas|historias grandes|recomendación'
+    ).hasMatch(textoEnMinusculas);
+
+    // 1. Flujo de creación de tarea
     if (_modo != ConversationMode.preguntando) {
       _continuarCreacionTarea(textoEnMinusculas);
-    } else if (textoEnMinusculas.startsWith('agregar tarea:')) {
+    }
+
+    // 2. Agregar tarea por comando
+    else if (textoEnMinusculas.startsWith('agregar tarea:')) {
       _iniciarCreacionTarea(texto);
-    } else {
+    }
+
+    // 3. Sugerencia historias explícito (con o sin dos puntos)
+    else if (textoEnMinusculas.startsWith('sugerencia historias')) {
+      final pregunta = texto.substring('sugerencia historias'.length).trim();
+      _obtenerSugerenciasDeHistorias(
+        pregunta.isNotEmpty ? pregunta : "¿Cómo deberíamos priorizar las historias?"
+      );
+    }
+
+    // 4. Detección por expresiones comunes
+    else if (esPreguntaPriorizacion) {
+      _obtenerSugerenciasDeHistorias(texto);
+    }
+
+    // 5. Pregunta general a ScrumBot
+    else {
       _hacerPreguntaScrum(texto);
     }
   }
@@ -121,11 +146,47 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     }
   }
 
-  void _hacerPreguntaScrum(String texto) async {
-    setState(() {
-      _estaCargando = true;
-    });
+  Future<void> _obtenerSugerenciasDeHistorias(String pregunta) async {
+    setState(() => _estaCargando = true);
 
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('historias').get();
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _mensajes.add(ChatMessage(
+              texto: 'No hay historias en el Product Backlog para analizar.',
+              esUsuario: false));
+          _estaCargando = false;
+        });
+        return;
+      }
+
+      String contexto = "Estas son las historias en el Product Backlog:\n";
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        contexto +=
+            "- Título: ${data['titulo']}, Descripción: ${data['descripcion']}, Prioridad: ${data['prioridad']}, Estimación: ${data['estimacion']} horas\n";
+      }
+
+      final prompt = "$contexto\n\nAhora responde a la pregunta: \"$pregunta\"";
+
+      final respuesta = await ApiService.getScrumBotResponse(prompt);
+      setState(() {
+        _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
+      });
+    } catch (e) {
+      setState(() {
+        _mensajes.add(ChatMessage(
+            texto: 'Ocurrió un error al obtener las historias.',
+            esUsuario: false));
+      });
+    } finally {
+      setState(() => _estaCargando = false);
+    }
+  }
+
+  void _hacerPreguntaScrum(String texto) async {
+    setState(() => _estaCargando = true);
     final respuesta = await ApiService.getScrumBotResponse(texto);
     setState(() {
       _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
