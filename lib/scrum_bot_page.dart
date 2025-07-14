@@ -107,8 +107,11 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
             texto: 'Genial. ¿Y la prioridad? (Alta, Media, Baja)',
             esUsuario: false));
       } else if (_modo == ConversationMode.creandoTarea_PidiendoPrioridad) {
-        if (['alta', 'media', 'baja'].contains(texto.toLowerCase())) {
-          _prioridadTemp = texto;
+        final prioridadNormalizada = texto.toLowerCase();
+        if (['alta', 'media', 'baja'].contains(prioridadNormalizada)) {
+          // Capitaliza la primera letra y el resto en minúsculas.
+          _prioridadTemp = prioridadNormalizada[0].toUpperCase() +
+              prioridadNormalizada.substring(1);
           _modo = ConversationMode.creandoTarea_PidiendoEstimacion;
           _mensajes.add(ChatMessage(
               texto: 'Perfecto. ¿Cuántas horas estimas?', esUsuario: false));
