@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'gemma_api_service.dart';
-import 'tarea.dart'; // Necesitamos acceso a la clase Tarea y la lista de tareas
+import 'tarea.dart';
 
-// Enum para controlar el modo de la conversación (preguntando o creando tarea)
 enum ConversationMode {
   preguntando,
   creandoTarea_PidiendoPrioridad,
@@ -28,52 +27,59 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
   final TextEditingController _controlador = TextEditingController();
   bool _estaCargando = false;
 
-  // --- NUEVOS ESTADOS PARA CONTROLAR LA CREACIÓN DE TAREAS ---
   ConversationMode _modo = ConversationMode.preguntando;
   String? _tituloTemp;
   String? _prioridadTemp;
-  // --- FIN DE NUEVOS ESTADOS ---
 
   @override
   void initState() {
     super.initState();
     _mensajes.add(ChatMessage(
-        texto:
-            '¡Hola! Soy ScrumBot. Pregúntame sobre Scrum, puedo añadir una tarea por ti si escribes "agregar tarea: [tu tarea]" o dime si deseas alguna recomendación para priorizar tus historias de usuario.',
-        esUsuario: false));
+      texto:
+          '¡Hola! Soy ScrumBot 🤖. Pregúntame sobre Scrum o escribe "agregar tarea: [tu tarea]". También puedo ayudarte con la priorización de tus historias escribiendo "sugerencia historias: [tu pregunta]".',
+      esUsuario: false,
+    ));
   }
 
-  // --- LÓGICA PRINCIPAL MODIFICADA ---
   void _enviarMensaje() async {
     final texto = _controlador.text.trim();
     if (texto.isEmpty) return;
 
     final textoEnMinusculas = texto.toLowerCase();
 
-    // Añadimos el mensaje del usuario a la lista
     setState(() {
       _mensajes.add(ChatMessage(texto: texto, esUsuario: true));
     });
     _controlador.clear();
 
-    // --- DECIDIMOS QUÉ HACER CON EL MENSAJE ---
+    final esPreguntaPriorizacion = RegExp(
+      r'priorizar|ordenar|hacer primero|importante|backlog|dividir tareas|historias grandes|recomendación'
+    ).hasMatch(textoEnMinusculas);
 
-    // Expresión regular para detectar preguntas sobre priorización
-    final esPreguntaPriorizacion = RegExp(r'priorizar|dividir|ordenar|qué historias hacer primero|historias muy grandes').hasMatch(textoEnMinusculas);
-
-    // 1. Si estamos en medio de la creación de una tarea, continuamos ese flujo.
+    // 1. Flujo de creación de tarea
     if (_modo != ConversationMode.preguntando) {
       _continuarCreacionTarea(textoEnMinusculas);
     }
-    // 2. Si el usuario quiere agregar una nueva tarea.
+
+    // 2. Agregar tarea por comando
     else if (textoEnMinusculas.startsWith('agregar tarea:')) {
       _iniciarCreacionTarea(texto);
     }
-    // NUEVO: 3. Si es una pregunta sobre priorización de historias.
+
+    // 3. Sugerencia historias explícito (con o sin dos puntos)
+    else if (textoEnMinusculas.startsWith('sugerencia historias')) {
+      final pregunta = texto.substring('sugerencia historias'.length).trim();
+      _obtenerSugerenciasDeHistorias(
+        pregunta.isNotEmpty ? pregunta : "¿Cómo deberíamos priorizar las historias?"
+      );
+    }
+
+    // 4. Detección por expresiones comunes
     else if (esPreguntaPriorizacion) {
       _obtenerSugerenciasDeHistorias(texto);
     }
-    // 4. Si es cualquier otro mensaje, lo tratamos como una pregunta para la IA.
+
+    // 5. Pregunta general a ScrumBot
     else {
       _hacerPreguntaScrum(texto);
     }
@@ -84,8 +90,9 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       _tituloTemp = texto.substring(15).trim();
       _modo = ConversationMode.creandoTarea_PidiendoPrioridad;
       _mensajes.add(ChatMessage(
-          texto: 'Entendido. ¿Cuál es la prioridad de la tarea? (Alta, Media, Baja)',
-          esUsuario: false));
+        texto: 'Entendido. ¿Cuál es la prioridad de la tarea? (Alta, Media, Baja)',
+        esUsuario: false,
+      ));
     });
   }
 
@@ -96,14 +103,16 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
           _prioridadTemp = texto;
           _modo = ConversationMode.creandoTarea_PidiendoEstimacion;
           _mensajes.add(ChatMessage(
-              texto: 'Perfecto. ¿Cuántas horas estimas para esta tarea?',
-              esUsuario: false));
+            texto: 'Perfecto. ¿Cuántas horas estimas para esta tarea?',
+            esUsuario: false,
+          ));
         });
       } else {
         setState(() {
           _mensajes.add(ChatMessage(
-              texto: 'Prioridad no válida. Por favor, responde Alta, Media o Baja.',
-              esUsuario: false));
+            texto: 'Prioridad no válida. Por favor, responde Alta, Media o Baja.',
+            esUsuario: false,
+          ));
         });
       }
     } else if (_modo == ConversationMode.creandoTarea_PidiendoEstimacion) {
@@ -115,14 +124,13 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
           estimacion: horas,
           fechaRegistro: DateTime.now(),
         );
-        tareas.add(nuevaTarea); // Añadimos la tarea a la lista global
-
+        tareas.add(nuevaTarea);
         setState(() {
           _mensajes.add(ChatMessage(
-              texto:
-                  '¡Tarea registrada con éxito!\nTítulo: ${_tituloTemp!}\nPrioridad: ${_prioridadTemp!}\nEstimación: $horas horas.',
-              esUsuario: false));
-          // Reseteamos el modo para la siguiente conversación
+            texto:
+                '✅ ¡Tarea registrada!\n📝 Título: ${_tituloTemp!}\n🚦 Prioridad: ${_prioridadTemp!}\n⏱️ Estimación: $horas horas.',
+            esUsuario: false,
+          ));
           _modo = ConversationMode.preguntando;
           _tituloTemp = null;
           _prioridadTemp = null;
@@ -130,18 +138,55 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       } else {
         setState(() {
           _mensajes.add(ChatMessage(
-              texto: 'Por favor, introduce un número válido para las horas.',
-              esUsuario: false));
+            texto: 'Por favor, introduce un número válido para las horas.',
+            esUsuario: false,
+          ));
         });
       }
     }
   }
 
-  void _hacerPreguntaScrum(String texto) async {
-    setState(() {
-      _estaCargando = true;
-    });
+  Future<void> _obtenerSugerenciasDeHistorias(String pregunta) async {
+    setState(() => _estaCargando = true);
 
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('historias').get();
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _mensajes.add(ChatMessage(
+              texto: 'No hay historias en el Product Backlog para analizar.',
+              esUsuario: false));
+          _estaCargando = false;
+        });
+        return;
+      }
+
+      String contexto = "Estas son las historias en el Product Backlog:\n";
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        contexto +=
+            "- Título: ${data['titulo']}, Descripción: ${data['descripcion']}, Prioridad: ${data['prioridad']}, Estimación: ${data['estimacion']} horas\n";
+      }
+
+      final prompt = "$contexto\n\nAhora responde a la pregunta: \"$pregunta\"";
+
+      final respuesta = await ApiService.getScrumBotResponse(prompt);
+      setState(() {
+        _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
+      });
+    } catch (e) {
+      setState(() {
+        _mensajes.add(ChatMessage(
+            texto: 'Ocurrió un error al obtener las historias.',
+            esUsuario: false));
+      });
+    } finally {
+      setState(() => _estaCargando = false);
+    }
+  }
+
+  void _hacerPreguntaScrum(String texto) async {
+    setState(() => _estaCargando = true);
     final respuesta = await ApiService.getScrumBotResponse(texto);
     setState(() {
       _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
@@ -149,59 +194,20 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     });
   }
 
-  // --- NUEVA FUNCIÓN PARA OBTENER SUGERENCIAS ---
-  Future<void> _obtenerSugerenciasDeHistorias(String pregunta) async {
-    setState(() {
-      _estaCargando = true;
-    });
-
-    try {
-      final snapshot = await FirebaseFirestore.instance.collection('historias').get();
-      if (snapshot.docs.isEmpty) {
-        setState(() {
-          _mensajes.add(ChatMessage(texto: 'No hay historias en el Product Backlog para analizar.', esUsuario: false));
-          _estaCargando = false;
-        });
-        return;
-      }
-
-      String contextoHistorias = "Aquí tienes una lista de historias de usuario del Product Backlog:\n";
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        contextoHistorias += "- Título: ${data['titulo']}, Descripción: ${data['descripcion']}, Prioridad: ${data['prioridad']}, Estimación: ${data['estimacion']} horas\n";
-      }
-
-      final promptCompleto = "$contextoHistorias\n\nBasado en estas historias, responde a la siguiente pregunta del usuario: \"$pregunta\"";
-
-      final respuesta = await ApiService.getScrumBotResponse(promptCompleto);
-      setState(() {
-        _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
-      });
-
-    } catch (e) {
-      setState(() {
-        _mensajes.add(ChatMessage(texto: 'Ocurrió un error al obtener las historias. Inténtalo de nuevo.', esUsuario: false));
-      });
-    } finally {
-      setState(() {
-        _estaCargando = false;
-      });
-    }
-  }
-  // --- FIN DE LA NUEVA FUNCIÓN ---
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: Text('ScrumBot'),
-        leading: BackButton(onPressed: () => Navigator.pop(context)),
+        backgroundColor: Colors.deepPurple,
+        leading: BackButton(color: Colors.white),
       ),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(12),
               itemCount: _mensajes.length,
               itemBuilder: (context, index) {
                 final msg = _mensajes[index];
@@ -212,15 +218,12 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
           if (_estaCargando)
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 10),
-                    Text("ScrumBot está pensando...")
-                  ],
-                ),
+              child: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 12),
+                  Text("ScrumBot está escribiendo..."),
+                ],
               ),
             ),
           Divider(height: 1),
@@ -234,25 +237,39 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     return Align(
       alignment: msg.esUsuario ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 8.0),
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(14),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
-          color: msg.esUsuario ? Colors.blue[100] : Colors.grey[300],
-          borderRadius: BorderRadius.circular(15.0),
+          color: msg.esUsuario ? Colors.deepPurple[200] : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+            bottomLeft: msg.esUsuario ? Radius.circular(16) : Radius.circular(0),
+            bottomRight: msg.esUsuario ? Radius.circular(0) : Radius.circular(16),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: msg.esUsuario
-            ? Text(msg.texto)
-            : MarkdownBody(
-                data: msg.texto,
-                selectable: true,
-              ),
+            ? Text(
+                msg.texto,
+                style: TextStyle(color: Colors.white, fontSize: 15),
+              )
+            : MarkdownBody(data: msg.texto),
       ),
     );
   }
 
   Widget _buildChatInput() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
           Expanded(
@@ -260,21 +277,23 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
               controller: _controlador,
               decoration: InputDecoration(
                 hintText: 'Pregunta o agrega una tarea...',
+                filled: true,
+                fillColor: Colors.grey[200],
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20.0),
+                  borderSide: BorderSide.none,
                 ),
               ),
-              onSubmitted: (texto) => _estaCargando ? null : _enviarMensaje(),
+              onSubmitted: (_) => _estaCargando ? null : _enviarMensaje(),
             ),
           ),
           SizedBox(width: 8),
-          IconButton(
-            icon: Icon(Icons.send),
-            onPressed: _estaCargando ? null : _enviarMensaje,
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.all(15),
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
+          CircleAvatar(
+            backgroundColor: Colors.deepPurple,
+            child: IconButton(
+              icon: Icon(Icons.send, color: Colors.white),
+              onPressed: _estaCargando ? null : _enviarMensaje,
             ),
           ),
         ],
