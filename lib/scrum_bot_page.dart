@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
 import 'gemma_api_service.dart';
-import 'tarea.dart';
 
 enum ConversationMode {
   preguntando,
+  creandoTarea_PidiendoDescripcion,
   creandoTarea_PidiendoPrioridad,
   creandoTarea_PidiendoEstimacion
 }
@@ -29,6 +30,7 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
 
   ConversationMode _modo = ConversationMode.preguntando;
   String? _tituloTemp;
+  String? _descripcionTemp;
   String? _prioridadTemp;
 
   @override
@@ -52,35 +54,11 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
     });
     _controlador.clear();
 
-    final esPreguntaPriorizacion = RegExp(
-      r'priorizar|ordenar|hacer primero|importante|backlog|dividir tareas|historias grandes|recomendación'
-    ).hasMatch(textoEnMinusculas);
-
-    // 1. Flujo de creación de tarea
     if (_modo != ConversationMode.preguntando) {
-      _continuarCreacionTarea(textoEnMinusculas);
-    }
-
-    // 2. Agregar tarea por comando
-    else if (textoEnMinusculas.startsWith('agregar tarea:')) {
+      _continuarCreacionTarea(texto);
+    } else if (textoEnMinusculas.startsWith('agregar tarea:')) {
       _iniciarCreacionTarea(texto);
-    }
-
-    // 3. Sugerencia historias explícito (con o sin dos puntos)
-    else if (textoEnMinusculas.startsWith('sugerencia historias')) {
-      final pregunta = texto.substring('sugerencia historias'.length).trim();
-      _obtenerSugerenciasDeHistorias(
-        pregunta.isNotEmpty ? pregunta : "¿Cómo deberíamos priorizar las historias?"
-      );
-    }
-
-    // 4. Detección por expresiones comunes
-    else if (esPreguntaPriorizacion) {
-      _obtenerSugerenciasDeHistorias(texto);
-    }
-
-    // 5. Pregunta general a ScrumBot
-    else {
+    } else {
       _hacerPreguntaScrum(texto);
     }
   }
@@ -88,101 +66,70 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
   void _iniciarCreacionTarea(String texto) {
     setState(() {
       _tituloTemp = texto.substring(15).trim();
-      _modo = ConversationMode.creandoTarea_PidiendoPrioridad;
+      _modo = ConversationMode.creandoTarea_PidiendoDescripcion;
       _mensajes.add(ChatMessage(
-        texto: 'Entendido. ¿Cuál es la prioridad de la tarea? (Alta, Media, Baja)',
+        texto: 'Entendido. ¿Cuál es la descripción de la tarea?',
         esUsuario: false,
       ));
     });
   }
 
   void _continuarCreacionTarea(String texto) {
-    if (_modo == ConversationMode.creandoTarea_PidiendoPrioridad) {
-      if (['alta', 'media', 'baja'].contains(texto)) {
-        setState(() {
+    setState(() {
+      if (_modo == ConversationMode.creandoTarea_PidiendoDescripcion) {
+        _descripcionTemp = texto;
+        _modo = ConversationMode.creandoTarea_PidiendoPrioridad;
+        _mensajes.add(ChatMessage(
+            texto: 'Genial. ¿Y la prioridad? (Alta, Media, Baja)',
+            esUsuario: false));
+      } else if (_modo == ConversationMode.creandoTarea_PidiendoPrioridad) {
+        if (['alta', 'media', 'baja'].contains(texto.toLowerCase())) {
           _prioridadTemp = texto;
           _modo = ConversationMode.creandoTarea_PidiendoEstimacion;
           _mensajes.add(ChatMessage(
-            texto: 'Perfecto. ¿Cuántas horas estimas para esta tarea?',
-            esUsuario: false,
-          ));
-        });
-      } else {
-        setState(() {
+              texto: 'Perfecto. ¿Cuántas horas estimas?', esUsuario: false));
+        } else {
           _mensajes.add(ChatMessage(
-            texto: 'Prioridad no válida. Por favor, responde Alta, Media o Baja.',
-            esUsuario: false,
-          ));
-        });
+              texto: 'Prioridad inválida. Responde Alta, Media o Baja.',
+              esUsuario: false));
+        }
+      } else if (_modo == ConversationMode.creandoTarea_PidiendoEstimacion) {
+        final horas = int.tryParse(texto);
+        if (horas != null) {
+          _guardarTareaEnFirebase(horas);
+        } else {
+          _mensajes.add(ChatMessage(
+              texto: 'Introduce un número válido para las horas.',
+              esUsuario: false));
+        }
       }
-    } else if (_modo == ConversationMode.creandoTarea_PidiendoEstimacion) {
-      int? horas = int.tryParse(texto);
-      if (horas != null) {
-        final nuevaTarea = Tarea(
-          titulo: _tituloTemp!,
-          prioridad: _prioridadTemp!,
-          estimacion: horas,
-          fechaRegistro: DateTime.now(),
-        );
-        tareas.add(nuevaTarea);
-        setState(() {
-          _mensajes.add(ChatMessage(
-            texto:
-                '✅ ¡Tarea registrada!\n📝 Título: ${_tituloTemp!}\n🚦 Prioridad: ${_prioridadTemp!}\n⏱️ Estimación: $horas horas.',
-            esUsuario: false,
-          ));
-          _modo = ConversationMode.preguntando;
-          _tituloTemp = null;
-          _prioridadTemp = null;
-        });
-      } else {
-        setState(() {
-          _mensajes.add(ChatMessage(
-            texto: 'Por favor, introduce un número válido para las horas.',
-            esUsuario: false,
-          ));
-        });
-      }
-    }
+    });
   }
 
-  Future<void> _obtenerSugerenciasDeHistorias(String pregunta) async {
-    setState(() => _estaCargando = true);
+  void _guardarTareaEnFirebase(int horas) async {
+    final id = Uuid().v4();
+    final nuevaTarea = {
+      'id': id,
+      'titulo': _tituloTemp!,
+      'descripcion': _descripcionTemp!,
+      'prioridad': _prioridadTemp!,
+      'estimacion': horas,
+      'fecha_registro': Timestamp.now(),
+    };
 
-    try {
-      final snapshot = await FirebaseFirestore.instance.collection('historias').get();
-      if (snapshot.docs.isEmpty) {
-        setState(() {
-          _mensajes.add(ChatMessage(
-              texto: 'No hay historias en el Product Backlog para analizar.',
-              esUsuario: false));
-          _estaCargando = false;
-        });
-        return;
-      }
+    await FirebaseFirestore.instance.collection('tareas').doc(id).set(nuevaTarea);
 
-      String contexto = "Estas son las historias en el Product Backlog:\n";
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        contexto +=
-            "- Título: ${data['titulo']}, Descripción: ${data['descripcion']}, Prioridad: ${data['prioridad']}, Estimación: ${data['estimacion']} horas\n";
-      }
-
-      final prompt = "$contexto\n\nAhora responde a la pregunta: \"$pregunta\"";
-
-      final respuesta = await ApiService.getScrumBotResponse(prompt);
-      setState(() {
-        _mensajes.add(ChatMessage(texto: respuesta, esUsuario: false));
-      });
-    } catch (e) {
-      setState(() {
-        _mensajes.add(ChatMessage(
-            texto: 'Ocurrió un error al obtener las historias.',
-            esUsuario: false));
-      });
-    } finally {
-      setState(() => _estaCargando = false);
-    }
+    setState(() {
+      _mensajes.add(ChatMessage(
+        texto:
+            '✅ ¡Tarea registrada en Firebase!\n📝 Título: $_tituloTemp\n🚦 Prioridad: $_prioridadTemp\n⏱️ Estimación: $horas horas.',
+        esUsuario: false,
+      ));
+      _modo = ConversationMode.preguntando;
+      _tituloTemp = null;
+      _descripcionTemp = null;
+      _prioridadTemp = null;
+    });
   }
 
   void _hacerPreguntaScrum(String texto) async {
@@ -239,14 +186,17 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(14),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
           color: msg.esUsuario ? Colors.deepPurple[200] : Colors.white,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
-            bottomLeft: msg.esUsuario ? Radius.circular(16) : Radius.circular(0),
-            bottomRight: msg.esUsuario ? Radius.circular(0) : Radius.circular(16),
+            bottomLeft:
+                msg.esUsuario ? Radius.circular(16) : Radius.circular(0),
+            bottomRight:
+                msg.esUsuario ? Radius.circular(0) : Radius.circular(16),
           ),
           boxShadow: [
             BoxShadow(
@@ -279,7 +229,8 @@ class _ScrumBotPageState extends State<ScrumBotPage> {
                 hintText: 'Pregunta o agrega una tarea...',
                 filled: true,
                 fillColor: Colors.grey[200],
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20.0),
                   borderSide: BorderSide.none,
