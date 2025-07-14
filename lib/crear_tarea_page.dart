@@ -69,7 +69,7 @@ class _CrearTareaPageState extends State<CrearTareaPage> {
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value!.isEmpty) return 'Campo obligatorio';
-                  if (int.tryParse(value) == null) return 'Número no válido';
+                  if (int.tryParse(value) == null || int.parse(value) <= 0) return 'Número no válido';
                   return null;
                 },
               ),
