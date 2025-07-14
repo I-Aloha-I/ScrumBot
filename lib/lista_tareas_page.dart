@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'crear_tarea_page.dart';
 import 'editar_tarea_page.dart';
 
 class ListaTareasPage extends StatefulWidget {
@@ -80,17 +79,6 @@ class _ListaTareasPageState extends State<ListaTareasPage> {
             },
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => CrearTareaPage()),
-          );
-          if (result == true) setState(() {});
-        },
-        child: Icon(Icons.add),
-        tooltip: 'Crear Tarea',
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'ver_historias_page.dart';
 import 'crear_historia_page.dart';
+import 'crear_tarea_page.dart';
 import 'lista_tareas_page.dart';
 import 'scrum_bot_page.dart';
 
@@ -40,6 +41,13 @@ class PantallaInicial extends StatelessWidget {
               title: 'Crear Historia',
               subtitle: 'Agrega una nueva historia de usuario',
               page: CrearHistoriaPage(),
+            ),
+            _buildCard(
+              context,
+              icon: Icons.add_task,
+              title: 'Crear Tarea',
+              subtitle: 'Agrega una nueva tarea al Sprint',
+              page: CrearTareaPage(),
             ),
             _buildCard(
               context,
